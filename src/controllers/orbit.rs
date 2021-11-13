@@ -12,10 +12,18 @@ use bevy::{
     transform::components::Transform,
 };
 use serde::{Deserialize, Serialize};
-
+/// aAdds an orbit camera without a default input system
 pub struct OrbitCameraPlugin;
-
 impl Plugin for OrbitCameraPlugin {
+    fn build(&self, app: &mut AppBuilder) {
+        app.add_system(control_system.system())
+            .add_event::<ControlEvent>();
+    }
+}
+/// Orbit camera with default input mapping.
+pub struct OrbitCameraPluginDefaultInput;
+
+impl Plugin for OrbitCameraPluginDefaultInput {
     fn build(&self, app: &mut AppBuilder) {
         app.add_system(default_input_map.system())
             .add_system(control_system.system())
