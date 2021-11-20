@@ -15,7 +15,7 @@ default-features = false
 
 [dev-dependencies.bevy]
 version = "0.5"
-features = ["bevy_winit", "bevy_wgpu", "bevy_gltf"]
+features = ["bevy_winit",  "bevy_gltf"]
 default-features = false
 
 [target.'cfg(target_os = "linux")'.dev-dependencies.bevy]
