@@ -8,8 +8,8 @@ use bevy::{
 pub struct LookTransformPlugin;
 
 impl Plugin for LookTransformPlugin {
-    fn build(&self, app: &mut AppBuilder) {
-        app.add_system(look_transform_system.system());
+    fn build(&self, app: &mut App) {
+        app.add_system(look_transform_system);
     }
 }
 
@@ -21,7 +21,7 @@ pub struct LookTransformBundle {
 
 /// An eye and the target it's looking at. As a component, this can be modified in place of bevy's `Transform`, and the two will
 /// stay in sync.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Component, Copy, Debug)]
 pub struct LookTransform {
     pub eye: Vec3,
     pub target: Vec3,
@@ -38,8 +38,8 @@ impl LookTransform {
         (self.target - self.eye).length()
     }
 
-    pub fn look_direction(&self) -> Vec3 {
-        (self.target - self.eye).normalize()
+    pub fn look_direction(&self) -> Option<Vec3> {
+        (self.target - self.eye).try_normalize()
     }
 }
 
@@ -52,6 +52,7 @@ fn eye_look_at_target_transform(eye: Vec3, target: Vec3) -> Transform {
 }
 
 /// Preforms exponential smoothing on a `LookTransform`. Set the `lag_weight` between `0.0` and `1.0`, where higher is smoother.
+#[derive(Component)]
 pub struct Smoother {
     lag_weight: f32,
     lerp_tfm: Option<LookTransform>,
@@ -94,7 +95,7 @@ fn look_transform_system(
         let effective_look_transform = if let Some(mut smoother) = smoother {
             smoother.smooth_transform(look_transform)
         } else {
-            look_transform.clone()
+            *look_transform
         };
         *scene_transform = effective_look_transform.into();
     }
