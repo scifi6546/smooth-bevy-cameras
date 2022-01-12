@@ -10,13 +10,27 @@ use bevy::{
 };
 use serde::{Deserialize, Serialize};
 
-pub struct FpsCameraPlugin;
+#[derive(Default)]
+pub struct FpsCameraPlugin {
+    pub override_input_system: bool,
+}
+
+impl FpsCameraPlugin {
+    pub fn new(override_input_system: bool) -> Self {
+        Self {
+            override_input_system,
+        }
+    }
+}
 
 impl Plugin for FpsCameraPlugin {
-    fn build(&self, app: &mut AppBuilder) {
-        app.add_system(default_input_map.system())
-            .add_system(control_system.system())
+    fn build(&self, app: &mut App) {
+        let app = app
+            .add_system(control_system)
             .add_event::<ControlEvent>();
+        if !self.override_input_system {
+            app.add_system(default_input_map);
+        }
     }
 }
 
@@ -51,7 +65,7 @@ impl FpsCameraBundle {
 }
 
 /// Your typical first-person camera controller.
-#[derive(Clone, Copy, Debug, Deserialize, Serialize)]
+#[derive(Clone, Component, Copy, Debug, Deserialize, Serialize)]
 pub struct FpsCameraController {
     pub enabled: bool,
     pub mouse_rotate_sensitivity: Vec2,
@@ -137,7 +151,7 @@ pub fn control_system(
         };
 
     if controller.enabled {
-        let look_vector = transform.look_direction();
+        let look_vector = transform.look_direction().unwrap();
         let mut look_angles = LookAngles::from_vector(look_vector);
 
         let yaw_rot = Quat::from_axis_angle(Vec3::Y, look_angles.get_yaw());

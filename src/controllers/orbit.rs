@@ -4,7 +4,7 @@ use bevy::{
     app::prelude::*,
     ecs::{bundle::Bundle, prelude::*},
     input::{
-        mouse::{MouseMotion, MouseWheel},
+        mouse::{MouseMotion, MouseScrollUnit, MouseWheel},
         prelude::*,
     },
     math::prelude::*,
@@ -12,22 +12,28 @@ use bevy::{
     transform::components::Transform,
 };
 use serde::{Deserialize, Serialize};
-/// aAdds an orbit camera without a default input system
-pub struct OrbitCameraPlugin;
-impl Plugin for OrbitCameraPlugin {
-    fn build(&self, app: &mut AppBuilder) {
-        app.add_system(control_system.system())
-            .add_event::<ControlEvent>();
+
+#[derive(Default)]
+pub struct OrbitCameraPlugin {
+    pub override_input_system: bool,
+}
+
+impl OrbitCameraPlugin {
+    pub fn new(override_input_system: bool) -> Self {
+        Self {
+            override_input_system,
+        }
     }
 }
-/// Orbit camera with default input mapping.
-pub struct OrbitCameraPluginDefaultInput;
 
-impl Plugin for OrbitCameraPluginDefaultInput {
-    fn build(&self, app: &mut AppBuilder) {
-        app.add_system(default_input_map.system())
-            .add_system(control_system.system())
+impl Plugin for OrbitCameraPlugin {
+    fn build(&self, app: &mut App) {
+        let app = app
+            .add_system(control_system)
             .add_event::<ControlEvent>();
+        if !self.override_input_system {
+            app.add_system(default_input_map);
+        }
     }
 }
 
@@ -62,12 +68,13 @@ impl OrbitCameraBundle {
 }
 
 /// A 3rd person camera that orbits around the target.
-#[derive(Clone, Copy, Debug, Deserialize, Serialize)]
+#[derive(Clone, Component, Copy, Debug, Deserialize, Serialize)]
 pub struct OrbitCameraController {
     pub enabled: bool,
     pub mouse_rotate_sensitivity: Vec2,
     pub mouse_translate_sensitivity: Vec2,
     pub mouse_wheel_zoom_sensitivity: f32,
+    pub pixels_per_line: f32,
     pub smoothing_weight: f32,
 }
 
@@ -79,6 +86,7 @@ impl Default for OrbitCameraController {
             mouse_wheel_zoom_sensitivity: 0.15,
             smoothing_weight: 0.8,
             enabled: true,
+            pixels_per_line: 53.0,
         }
     }
 }
@@ -108,6 +116,7 @@ pub fn default_input_map(
         mouse_rotate_sensitivity,
         mouse_translate_sensitivity,
         mouse_wheel_zoom_sensitivity,
+        pixels_per_line,
         ..
     } = *controller;
 
@@ -132,7 +141,12 @@ pub fn default_input_map(
 
     let mut scalar = 1.0;
     for event in mouse_wheel_reader.iter() {
-        scalar *= 1.0 + -event.y * mouse_wheel_zoom_sensitivity;
+        // scale the event magnitude per pixel or per line
+        let scroll_amount = match event.unit {
+            MouseScrollUnit::Line => event.y,
+            MouseScrollUnit::Pixel => event.y / pixels_per_line,
+        };
+        scalar *= 1.0 - scroll_amount * mouse_wheel_zoom_sensitivity;
     }
     events.send(ControlEvent::Zoom(scalar));
 }
@@ -150,7 +164,7 @@ pub fn control_system(
         };
 
     if controller.enabled {
-        let mut look_angles = LookAngles::from_vector(-transform.look_direction());
+        let mut look_angles = LookAngles::from_vector(-transform.look_direction().unwrap());
         let mut radius_scalar = 1.0;
 
         for event in events.iter() {
@@ -172,8 +186,10 @@ pub fn control_system(
 
         look_angles.assert_not_looking_up();
 
-        transform.eye =
-            transform.target + radius_scalar * transform.radius() * look_angles.unit_vector();
+        let new_radius = (radius_scalar * transform.radius())
+            .min(1000000.0)
+            .max(0.001);
+        transform.eye = transform.target + new_radius * look_angles.unit_vector();
     } else {
         events.iter(); // Drop the events.
     }
